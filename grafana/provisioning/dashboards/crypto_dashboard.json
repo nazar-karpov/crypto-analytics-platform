@@ -1,0 +1,308 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT hour as time, close as value FROM crypto.mart_hourly_ohlcv FINAL WHERE coin_id = 'bitcoin' ORDER BY hour",
+          "format": 1,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Цена Bitcoin",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT hour as time, close as value FROM crypto.mart_hourly_ohlcv FINAL WHERE coin_id = 'ethereum' ORDER BY hour",
+          "format": 1,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Цена Ethereum",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20 },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "hidden", "showLegend": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT hour as time, total_market_cap as value FROM crypto.mart_market_overview FINAL ORDER BY hour",
+          "format": 1,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Общая капитализация рынка",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "orange", "value": 65 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 8 },
+      "id": 4,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT btc_dominance FROM crypto.mart_market_overview FINAL ORDER BY hour DESC LIMIT 1",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Доминация BTC",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "purple", "value": 15 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 8 },
+      "id": 5,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT eth_dominance FROM crypto.mart_market_overview FINAL ORDER BY hour DESC LIMIT 1",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Доминация ETH",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "unit": "currencyUSD",
+          "decimals": 0
+        }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 12 },
+      "id": 9,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/.*/" },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT total_volume FROM crypto.mart_market_overview FINAL ORDER BY hour DESC LIMIT 1",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Объём торгов 24ч",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "price_change_24h_pct" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "custom.displayMode", "value": "color-text" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": null },
+                    { "color": "green", "value": 0 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 6,
+      "options": {
+        "sortBy": [{ "displayName": "price_change_24h_pct", "desc": true }],
+        "footer": { "show": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT name, symbol, price_change_24h_pct, direction, rank FROM crypto.mart_top_movers FINAL ORDER BY direction, rank LIMIT 20",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Топ 10 растущих и падающих",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {}
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 7,
+      "options": {
+        "sortBy": [{ "displayName": "last_price", "desc": true }],
+        "footer": { "show": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT coin_id, symbol, name, last_price, avg_price_7d, volatility_30d FROM crypto.mart_coin_stats FINAL ORDER BY last_price DESC LIMIT 20",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Топ монет по рыночным показателям",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+      "fieldConfig": {
+        "defaults": {}
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 8,
+      "options": {
+        "sortBy": [{ "displayName": "volume", "desc": true }],
+        "footer": { "show": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse-crypto" },
+          "queryType": "sql",
+          "rawSql": "SELECT coin_id, hour, open, high, low, close, volume FROM crypto.mart_hourly_ohlcv FINAL ORDER BY hour DESC, volume DESC LIMIT 50",
+          "format": 2,
+          "refId": "A",
+          "editorType": "sql"
+        }
+      ],
+      "title": "Часовые OHLCV (по объёму)",
+      "type": "table"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "tags": ["crypto", "realtime"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Crypto Analytics",
+  "uid": "crypto-analytics-v1",
+  "version": 3
+}
