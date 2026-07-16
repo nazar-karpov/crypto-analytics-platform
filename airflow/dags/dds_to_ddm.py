@@ -2,7 +2,8 @@
 DAG: dds_to_ddm  (runs every hour, depends on stg_to_dds)
 
 Pure pandas version — no PySpark, no JVM.
-Reads DDS Parquet from MinIO, computes 4 marts, writes to ClickHouse.
+Reads the DDS Iceberg tables (dds.coins_dim, dds.prices_fact),
+computes 4 marts, writes to ClickHouse.
 """
 from __future__ import annotations
 
@@ -12,24 +13,11 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 
-MINIO_ENDPOINT   = os.environ.get("MINIO_ENDPOINT", "http://minio:9000")
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "admin")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "password123")
 CLICKHOUSE_HOST  = os.environ.get("CLICKHOUSE_HOST", "clickhouse")
 CLICKHOUSE_PORT  = int(os.environ.get("CLICKHOUSE_PORT", "8123"))
 CLICKHOUSE_DB    = os.environ.get("CLICKHOUSE_DB", "crypto")
 
 default_args = {"owner": "airflow", "retries": 1}
-
-
-def _s3fs():
-    import s3fs
-    return s3fs.S3FileSystem(
-        key=MINIO_ACCESS_KEY,
-        secret=MINIO_SECRET_KEY,
-        endpoint_url=MINIO_ENDPOINT,
-        use_ssl=False,
-    )
 
 
 def _ch():
@@ -54,17 +42,15 @@ def _insert(ch, table: str, df):
 def compute_marts(**context):
     import pandas as pd
     import numpy as np
-    import io
+    from iceberg_utils import COINS_DIM_TABLE, PRICES_FACT_TABLE, get_catalog
 
-    fs = _s3fs()
     ch = _ch()
 
-    # ── Load DDS ──────────────────────────────────────────────────────────────
+    # ── Load DDS (Iceberg tables) ────────────────────────────────────────────
     try:
-        with fs.open("dds/prices_fact/prices_fact.parquet", "rb") as fh:
-            fact = pd.read_parquet(fh)
-        with fs.open("dds/coins_dim/coins_dim.parquet", "rb") as fh:
-            dim = pd.read_parquet(fh)
+        catalog = get_catalog()
+        fact = catalog.load_table(PRICES_FACT_TABLE).scan().to_pandas()
+        dim = catalog.load_table(COINS_DIM_TABLE).scan().to_pandas()
     except Exception as exc:
         print(f"DDS not ready yet: {exc}")
         return

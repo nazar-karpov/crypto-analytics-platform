@@ -20,10 +20,12 @@ echo "Creating buckets..."
 mc mb --ignore-existing myminio/stg
 mc mb --ignore-existing myminio/dds
 mc mb --ignore-existing myminio/scripts
+mc mb --ignore-existing myminio/lakehouse
 
 echo "Setting public access..."
 mc anonymous set public myminio/stg
 mc anonymous set public myminio/dds
+mc anonymous set public myminio/lakehouse
 
 echo "Bucket listing:"
 mc ls myminio

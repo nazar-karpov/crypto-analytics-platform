@@ -1,7 +1,7 @@
 # Real-time Crypto Analytics Platform
 
-Платформа аналитики криптовалют с потоковой обработкой данных,
-3-слойной архитектурой lakehouse и AI-агентом для ответов на вопросы.
+Платформа аналитики криптовалют с потоковой обработкой данных
+и 3-слойной lakehouse-архитектурой (Apache Iceberg).
 
 ---
 
@@ -21,14 +21,17 @@
 │       │               │           │    └─ year/month/day/   │   │
 │       └───────────────┤           │       (raw Parquet)     │   │
 │                       │           │                         │   │
-│                       ▼           │  dds/coins_dim/         │   │
-│              ┌────────────────┐   │    └─ SCD2 dimension    │   │
-│              │ Python Consumer│   │  dds/prices_fact/       │   │
-│              │ (Kafka → STG)  │──▶│    └─ fact table        │   │
+│                       ▼           │  lakehouse/ (Iceberg)   │   │
+│              ┌────────────────┐   │  dds.coins_dim (SCD2)   │   │
+│              │ Python Consumer│   │  dds.prices_fact        │   │
+│              │ (Kafka → STG)  │──▶│  (append-only, ACID)    │   │
 │              └────────────────┘   └───────────┬─────────────┘   │
 │                                               │                  │
+│                              (catalog: iceberg-rest, REST API)   │
+│                                               │                  │
 │                                    ┌──────────▼──────────┐      │
-│                                    │   Airflow (pandas)   │      │
+│                                    │   Airflow (pandas +  │      │
+│                                    │      PyIceberg)      │      │
 │                                    │  ┌───────────────┐  │      │
 │                                    │  │  stg_to_dds   │  │      │
 │                                    │  └───────┬───────┘  │      │
@@ -45,12 +48,11 @@
 │                                    │  mart_coin_stats    │       │
 │                                    └─────────┬──────────┘       │
 │                                              │                   │
-│                              ┌───────────────┴──────────┐       │
-│                              ▼                           ▼       │
-│                        ┌──────────┐             ┌────────────┐  │
-│                        │ Grafana  │             │  AI Agent  │  │
-│                        │Dashboard │             │  (FastAPI) │  │
-│                        └──────────┘             └────────────┘  │
+│                                              ▼                   │
+│                                        ┌──────────┐             │
+│                                        │ Grafana  │             │
+│                                        │Dashboard │             │
+│                                        └──────────┘             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,9 +60,13 @@
 
 | Слой | Хранилище | Назначение |
 |------|-----------|------------|
-| **STG** | `s3://stg/prices/` | Сырые данные из Kafka, partitioned по дате/часу |
-| **DDS** | `s3://dds/` | Очищенные данные; SCD2 измерение монет + таблица фактов |
-| **DDM** | ClickHouse `crypto.*` | Агрегированные витрины для аналитики |
+| **STG** (bronze) | `s3://stg/prices/` (raw Parquet) | Сырые данные из Kafka, partitioned по дате/часу |
+| **DDS** (silver) | **Apache Iceberg**-таблицы `dds.coins_dim` / `dds.prices_fact` в `s3://lakehouse/`, каталог метаданных — Iceberg REST catalog (`iceberg-rest`) | Очищенные данные с ACID-гарантиями: SCD2-измерение монет (атомарный overwrite снапшота) + append-only таблица фактов (без перезаписи всей истории) |
+| **DDM** (gold) | ClickHouse `crypto.*` | Агрегированные витрины для аналитики / serving-слой для Grafana |
+
+STG сознательно остался обычным Parquet — там нет upsert/dedup-логики,
+поэтому табличный формат ему не нужен. Табличный формат даёт пользу
+именно в silver-слое, где происходят SCD2 и дедупликация.
 
 ### Витрины данных (DDM)
 
@@ -79,11 +85,13 @@
 |-----------|------------|
 | Очередь сообщений | Apache Kafka |
 | Объектное хранилище | MinIO (S3-совместимое) |
+| **Табличный формат (lakehouse)** | **Apache Iceberg** (клиент — PyIceberg, без JVM/Spark в Airflow) |
+| **Каталог метаданных Iceberg** | **Iceberg REST catalog** (`tabulario/iceberg-rest`) |
 | Оркестрация | Apache Airflow |
 | Обработка данных | Python + pandas |
-| OLAP-хранилище | ClickHouse |
+| OLAP-хранилище / serving layer | ClickHouse |
+| Второй движок поверх lakehouse (демо) | DuckDB (`iceberg_scan`) |
 | Визуализация | Grafana |
-| AI-агент | FastAPI + OpenRouter (GPT-4o-mini) |
 | Контейнеризация | Docker Compose |
 
 ---
@@ -105,7 +113,6 @@
 git clone <repo-url>
 cd bigdata_hw
 cp .env.example .env
-# Отредактируй .env — добавь OPENROUTER_API_KEY
 docker compose up -d
 ```
 
@@ -114,7 +121,6 @@ docker compose up -d
 git clone <repo-url>
 cd bigdata_hw
 Copy-Item .env.example .env
-# Отредактируй .env — добавь OPENROUTER_API_KEY
 docker compose up -d
 ```
 
@@ -138,7 +144,6 @@ docker compose logs -f kafka-producer
 | **MinIO** | http://localhost:9001 | admin / password123 |
 | **Airflow** | http://localhost:8082 | admin / admin |
 | **Grafana** | http://localhost:3000 | admin / admin |
-| **AI Agent** | http://localhost:8000 | — |
 | **ClickHouse** | http://localhost:8123/play | — |
 
 ---
@@ -155,12 +160,15 @@ Parquet-файлы в MinIO `s3://stg/prices/`, партиционированн
 DAG `stg_to_dds`:
 - Читает свежие STG-партиции
 - Дедуплицирует записи
-- Применяет **SCD2** для измерения `coins_dim`
-- Дописывает записи в `prices_fact`
+- Применяет **SCD2** для измерения `dds.coins_dim` — пишет через
+  `table.overwrite()` (Iceberg): атомарный снапшот, а не risk of torn write
+- Дописывает новые записи в `dds.prices_fact` через `table.append()`
+  (Iceberg) — без перезаписи всей истории фактов на каждом прогоне,
+  дедуп-скан обрезается по времени благодаря partition-у `month(event_ts)`
 
 ### Шаг 3 — DDS → DDM (каждые 5 минут, Airflow)
 DAG `dds_to_ddm`:
-- Читает DDS из MinIO через pandas
+- Читает Iceberg-таблицы DDS через PyIceberg (`table.scan().to_pandas()`)
 - Вычисляет 4 витрины
 - Пишет в ClickHouse (ReplacingMergeTree)
 
@@ -172,20 +180,26 @@ DAG `initial_load` загружает 7 дней истории с CoinGecko:
 
 ---
 
-## AI Agent — Примеры вопросов
+## Lakehouse-возможности
 
-Открой http://localhost:8000 и спроси:
+Silver-слой (DDS) — это не просто Parquet-файлы, а настоящие **Apache
+Iceberg**-таблицы: у них есть ACID-снапшоты, история версий, time
+travel и schema evolution. Два демо-скрипта показывают это наглядно
+(запусти `stg_to_dds` в Airflow хотя бы 2 раза с интервалом 5 минут,
+чтобы накопилось несколько снапшотов):
 
-- *"Какая монета выросла больше всех за 24 часа?"*
-- *"Какая сейчас доминация Bitcoin на рынке?"*
-- *"Покажи топ-5 монет по объёму торгов"*
-- *"Какая была максимальная цена Bitcoin сегодня?"*
-- *"Сравни Bitcoin и Ethereum за последние 7 дней"*
-- *"Какая общая капитализация крипторынка?"*
-- *"Какие монеты больше всего упали сегодня?"*
+```bash
+# История снапшотов, time travel (сравнение строк "сейчас" и "раньше"),
+# добавление колонки в схему без переписывания старых файлов
+docker compose exec airflow-scheduler python /opt/airflow/scripts/demo_lakehouse_features.py
 
-Агент использует tool calling — генерирует SQL-запрос к ClickHouse,
-получает данные и формирует ответ на естественном языке.
+# Второй движок (DuckDB) читает те же Iceberg-таблицы напрямую по
+# metadata-файлу — без pandas и без ClickHouse
+docker compose exec airflow-scheduler python /opt/airflow/scripts/query_lakehouse_duckdb.py
+```
+
+Структуру Iceberg-таблиц (data/ и metadata/ файлы) можно увидеть в
+MinIO console (http://localhost:9001) в бакете `lakehouse`.
 
 ---
 
@@ -199,7 +213,7 @@ docker compose ps
 docker compose logs -f kafka-producer
 docker compose logs -f spark-streaming
 docker compose logs -f airflow-scheduler
-docker compose logs -f ai-agent
+docker compose logs -f iceberg-rest
 
 # Запустить DAG вручную
 docker compose exec airflow-scheduler airflow dags trigger stg_to_dds
@@ -216,7 +230,7 @@ docker compose exec clickhouse clickhouse-client --query "SELECT count() FROM cr
 |----------|---------|---------|
 | Grafana пустая | Витрины ещё не заполнены | Запусти `dds_to_ddm` вручную в Airflow |
 | Airflow показывает ошибку ClickHouse | ClickHouse не готов | Подожди 1-2 минуты, запусти таску повторно |
-| AI Agent: "Internal Server Error" | Нет API ключа OpenRouter | Добавь `OPENROUTER_API_KEY` в `.env` |
+| Airflow: ошибка подключения к каталогу | `iceberg-rest` ещё не готов | Подожди готовности `iceberg-rest`, запусти таску повторно |
 | Vmmem жрёт всю память (Windows) | WSL2 без лимита | Создай `~/.wslconfig` с `memory=8GB` |
 | Порт занят | Другой сервис на этом порту | `docker compose down`, освободи порт |
 
@@ -248,5 +262,15 @@ docker compose down -v
 4. **CoinGecko free API** — без API-ключа, лимит ~30 запросов/мин.
    Продюсер автоматически ждёт при получении 429.
 
-5. **OpenRouter + GPT-4o-mini** — надёжный tool calling для SQL-запросов.
-   Можно заменить на любую модель, изменив `OPENROUTER_MODEL` в `.env`.
+5. **Apache Iceberg (через PyIceberg) вместо Delta Lake / Hudi** для DDS-слоя —
+   Iceberg полноценно работает без Spark из чистого Python, что совпадает
+   с уже принятым решением избавиться от JVM-стека. Delta Lake без Spark
+   работает хуже (через менее зрелый `delta-rs`), Hudi тяжелее и хуже
+   документирован для Python-only сценария.
+
+6. **Iceberg REST catalog (`tabulario/iceberg-rest`), а не PyIceberg SQL-каталог
+   на Postgres** — PyIceberg-экстра `sql-postgres`/`sql-sqlite` тянет
+   SQLAlchemy 2.x, а Airflow 2.8 (через Flask-AppBuilder) жёстко требует
+   SQLAlchemy `<2.0`; апгрейд ломает Airflow webserver. REST-каталог общается
+   с Airflow только по HTTP, без SQLAlchemy — конфликта нет. Это же
+   стандартная связка из официального Iceberg quickstart.

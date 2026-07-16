@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-airflow-common: &airflow-common
   build: ./airflow
   environment:
@@ -20,12 +18,17 @@ x-airflow-common: &airflow-common
     CLICKHOUSE_HOST: clickhouse
     CLICKHOUSE_PORT: '8123'
     CLICKHOUSE_DB: crypto
+    ICEBERG_REST_URI: http://iceberg-rest:8181
+    ICEBERG_WAREHOUSE: s3://lakehouse/
   volumes:
     - ./airflow/dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
     - airflow-logs:/opt/airflow/logs
     - airflow-plugins:/opt/airflow/plugins
   depends_on:
     airflow-postgres:
+      condition: service_healthy
+    iceberg-rest:
       condition: service_healthy
   networks:
     - crypto-net
@@ -132,14 +135,55 @@ services:
         mc mb --ignore-existing myminio/stg;
         mc mb --ignore-existing myminio/dds;
         mc mb --ignore-existing myminio/scripts;
+        mc mb --ignore-existing myminio/lakehouse;
         mc anonymous set public myminio/stg;
         mc anonymous set public myminio/dds;
+        mc anonymous set public myminio/lakehouse;
         echo 'MinIO buckets ready';
       "
     networks:
       - crypto-net
 
   # Spark removed — replaced by lightweight Python consumer (spark_streaming service)
+
+  # ─── Iceberg REST catalog (metadata store for the DDS lakehouse tables) ───────
+  # Talks HTTP only to Airflow's PyIceberg client — keeps SQLAlchemy 2.x out of
+  # the Airflow image, since Airflow 2.8/Flask-AppBuilder needs SQLAlchemy <2.0.
+  iceberg-rest:
+    image: tabulario/iceberg-rest:1.6.0
+    container_name: iceberg-rest
+    mem_limit: 512m
+    # Run as root so the process can write the SQLite catalog file to the
+    # named volume (the volume's mount dir is root-owned; the image's default
+    # uid 1000 can't create files there). Fine for a local dev/student stack.
+    user: root
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_REGION: us-east-1
+      CATALOG_WAREHOUSE: s3://lakehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: 'true'
+      # Persist catalog metadata in a SQLite file on a volume, so table
+      # registrations survive container restarts (default is in-memory).
+      CATALOG_URI: jdbc:sqlite:file:/catalog/iceberg_catalog.db
+    volumes:
+      - iceberg-catalog:/catalog
+    ports:
+      - "8181:8181"
+    # No curl/wget in this minimal image; use bash /dev/tcp as a port probe.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8181"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    networks:
+      - crypto-net
 
   # ─── Airflow ──────────────────────────────────────────────────────────────────
   airflow-postgres:
@@ -295,25 +339,6 @@ services:
     networks:
       - crypto-net
 
-  # ─── AI Agent ─────────────────────────────────────────────────────────────────
-  ai-agent:
-    build: ./agent
-    container_name: ai-agent
-    mem_limit: 256m
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-    environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_PORT: '8123'
-      CLICKHOUSE_DB: crypto
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-    restart: unless-stopped
-    networks:
-      - crypto-net
-
 # ─── Networks & Volumes ─────────────────────────────────────────────────────────
 networks:
   crypto-net:
@@ -326,3 +351,4 @@ volumes:
   airflow-logs:
   airflow-plugins:
   grafana-data:
+  iceberg-catalog:
