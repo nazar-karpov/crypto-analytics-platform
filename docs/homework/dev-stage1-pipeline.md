@@ -4,11 +4,8 @@
 ## 1. Уточнение требований у PO
 
 Источник: Задания 1–2, PO — Магомедов Арсен (`Осокин_продакт_1_занятие.docx`,
-`Осокин_продакт_09.07_2_занятие.docx`).
-
-> Отчёты PO зафиксированы по состоянию ветки `main` (до конверсии DDS в
-> lakehouse). Ниже — трассировка его требований на финальную реализацию
-> (ветка `project-lakehouse-conversion`, которая выносится на защиту).
+`Осокин_продакт_09.07_2_занятие.docx`). Ниже — трассировка его требований
+(FR/NFR) на реализацию.
 
 ### Трассировка функциональных требований
 
@@ -17,7 +14,7 @@
 | FR-01 | Ingest котировок (топ-50, CoinGecko) | ✅ | Kafka producer, poll ~30с |
 | FR-02 | Буферизация потока (`raw_crypto_prices`) | ✅ | без изменений |
 | FR-03 | Сырой слой STG (Parquet, партиции по дате/часу) | ✅ | bronze остаётся plain Parquet |
-| FR-04 | Очищенный слой DDS (SCD2 + fact) | ✅ (расширено) | DDS — Apache Iceberg-таблицы (`dds.coins_dim`, `dds.prices_fact`): ACID-снапшоты, append вместо full-file rewrite |
+| FR-04 | Очищенный слой DDS (SCD2 + fact) | ✅ | DDS — Apache Iceberg-таблицы (`dds.coins_dim`, `dds.prices_fact`): ACID-снапшоты, SCD2-измерение, append-only факт |
 | FR-05 | Начальная загрузка (`initial_load`) | ✅ | без изменений |
 | FR-06 | Витрина OHLCV | ✅ | `mart_hourly_ohlcv` |
 | FR-07 | Витрина топ-муверов | ✅ | `mart_top_movers` |
@@ -44,14 +41,11 @@
 
 ### DoD (Definition of Done)
 
-PO сформулировал: *«compose up → данные в STG/DDS → 4 mart заполнены →
-дашборд и 3+ рабочих вопроса к агенту»*.
-
-Последний пункт скорректирован под финальный scope: вместо вопросов к
-агенту (FR-12 вне scope) сдаётся демонстрация lakehouse-возможностей —
-`scripts/demo_lakehouse_features.py` (снапшоты, time travel, schema
-evolution) и `scripts/query_lakehouse_duckdb.py` (второй движок читает те
-же Iceberg-таблицы). Остальные три пункта DoD не изменились.
+PO сформулировал DoD: *«compose up → данные в STG/DDS → 4 mart заполнены →
+дашборд и демонстрация lakehouse-возможностей»*. В эту итерацию входят
+снапшоты, time travel и schema evolution (`scripts/demo_lakehouse_features.py`)
+и второй движок, читающий те же Iceberg-таблицы (`scripts/query_lakehouse_duckdb.py`).
+AI-агент (FR-12) вне scope этой итерации.
 
 ## 2. Согласование с архитектором
 
