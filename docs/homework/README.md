@@ -47,6 +47,15 @@
 - [`stage2-po-dev-alignment.md`](stage2-po-dev-alignment.md) — согласование с PO и разработчиком, скорректированная архитектура
 - [`stage3-retrospective.md`](stage3-retrospective.md) — ретроспектива
 
+### Разработчик — первая домашка: mini-Lakehouse
+Инфраструктурный артефакт (Trino + Iceberg JDBC-каталог + MinIO +
+Postgres, докер-компоуз, SQL, health-check) — **отдельный репозиторий**
+[`nazar-karpov/mini-lakehouse`](https://github.com/nazar-karpov/mini-lakehouse)
+(не эта папка — задание требовало отдельный `git init`). Обсуждения с
+архитектором/PO и ретроспектива по нему — здесь:
+- [`dev1-stage2-architect-po-sync.md`](dev1-stage2-architect-po-sync.md) — согласование с архитектором и PO, бэклог, DoD
+- [`dev1-stage3-retrospective.md`](dev1-stage3-retrospective.md) — ретроспектива
+
 ### Разработчик — Занятие 2
 - [`dev-stage1-pipeline.md`](dev-stage1-pipeline.md) — трассировка FR/NFR ПО → факт реализации, согласование с архитектором, реальное развёртывание/тесты
 - [`dev-stage2-team-sync.md`](dev-stage2-team-sync.md) — кто о чём говорит на защите, финальная версия проекта
