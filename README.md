@@ -201,6 +201,9 @@ docker compose exec airflow-scheduler python /opt/airflow/scripts/query_lakehous
 Структуру Iceberg-таблиц (data/ и metadata/ файлы) можно увидеть в
 MinIO console (http://localhost:9001) в бакете `lakehouse`.
 
+Артефакты домашнего задания (выбор нотации, C4-диаграммы, ADR по каждому
+сервису, согласование с PO/Dev, ретроспектива) — в [`docs/homework/`](docs/homework/).
+
 ---
 
 ## Мониторинг
